@@ -2,15 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { YouTube } = require('youtube-sr');
-const { spawn } = require('child_process');
-const fs = require('fs');
-const os = require('os');
+const ytdl = require('@distube/ytdl-core');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const YTDLP_PATH = path.join(__dirname, 'yt-dlp.exe');
-const TEMP_DIR = path.join(os.tmpdir(), 'melimewah-dl');
-if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 process.on('uncaughtException', (err) => console.error('Uncaught:', err));
 process.on('unhandledRejection', (err) => console.error('Unhandled:', err));
@@ -216,78 +211,36 @@ app.get('/api/lyrics/search', async (req, res) => {
 app.get('/api/download/:id', async (req, res) => {
   const { id } = req.params;
   const videoUrl = `https://www.youtube.com/watch?v=${id}`;
-  const outputFile = path.join(TEMP_DIR, `${id}.mp3`);
-
   console.log(`Download requested for: ${id}`);
 
-  const args = [
-    '-x', '--audio-format', 'mp3',
-    '--audio-quality', '192K',
-    '--no-playlist',
-    '--output', outputFile,
-    '--no-overwrites',
-    '--print', 'filename',
-    videoUrl
-  ];
-
-  const proc = spawn(YTDLP_PATH, args);
-
-  let stdoutData = '';
-  let stderrData = '';
-  proc.stdout.on('data', (chunk) => { stdoutData += chunk.toString(); });
-  proc.stderr.on('data', (chunk) => { stderrData += chunk.toString(); });
-
-  proc.on('close', (code) => {
-    if (code !== 0) {
-      console.error('yt-dlp error:', stderrData);
-      if (!res.headersSent) {
-        return res.status(500).json({ error: 'Download failed', details: stderrData });
-      }
-      return;
-    }
-
-    let filePath = outputFile;
-    if (!fs.existsSync(filePath)) {
-      const files = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith(id));
-      if (files.length > 0) filePath = path.join(TEMP_DIR, files[0]);
-    }
-
-    if (!fs.existsSync(filePath)) {
-      console.error('File not found after download');
-      return res.status(500).json({ error: 'File not found after conversion' });
-    }
-
-    const rawName = path.basename(filePath, '.mp3').replace(/[^\w\s\-()]/g, '').trim() || id;
-    const downloadName = `${rawName}.mp3`;
-    const stat = fs.statSync(filePath);
+  try {
+    const info = await ytdl.getInfo(videoUrl);
+    const title = info.videoDetails.title.replace(/[^\w\s\-()]/g, '').trim() || id;
 
     res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Content-Length', stat.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${title}.mp3"; filename*=UTF-8''${encodeURIComponent(title + '.mp3')}`);
 
-    const stream = fs.createReadStream(filePath);
+    const stream = ytdl.downloadFromInfo(info, { filter: 'audioonly', quality: 'highestaudio' });
     stream.pipe(res);
-    stream.on('end', () => {
-      setTimeout(() => {
-        try { fs.unlinkSync(filePath); } catch (e) {}
-      }, 5000);
-    });
+
     stream.on('error', (err) => {
       console.error('Stream error:', err);
-      if (!res.headersSent) res.status(500).json({ error: 'File read failed' });
+      if (!res.headersSent) res.status(500).json({ error: 'Download failed' });
     });
-  });
-
-  proc.on('error', (err) => {
-    console.error('Spawn error:', err);
-    if (!res.headersSent) res.status(500).json({ error: 'Failed to start download' });
-  });
+  } catch (err) {
+    console.error('Download error:', err.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Download failed', details: err.message });
+  }
 });
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Music streaming server running on http://localhost:${PORT}`);
-});
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  app.listen(PORT, () => {
+    console.log(`Music streaming server running on http://localhost:${PORT}`);
+  });
+}
