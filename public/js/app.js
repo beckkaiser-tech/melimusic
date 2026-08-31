@@ -665,17 +665,20 @@
   function downloadSong(id) {
     const song = findSongById(id);
     const title = song ? `${song.artist} - ${song.title}` : id;
-    showToast('Preparing download...');
+    const videoUrl = `https://www.youtube.com/watch?v=${id}`;
 
-    const a = document.createElement('a');
-    a.href = `/api/download/${id}`;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => document.body.removeChild(a), 1000);
-    showToast(`Downloading: ${title}`);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(videoUrl).then(() => {
+        showToast('Link copied! Paste in cobalt.tools to download');
+      }).catch(() => {
+        showToast('Copy the link from address bar');
+      });
+    } else {
+      showToast('Copy the link manually');
+    }
+
+    const w = window.open('https://cobalt.tools/', '_blank');
+    if (!w) showToast('Please allow popups for download');
   }
 
   function toggleFavorite(id) {

@@ -206,38 +206,8 @@ app.get('/api/lyrics/search', async (req, res) => {
   res.json({ syncedLyrics: null, plainLyrics: null, source: 'none' });
 });
 
-app.get('/api/download/:id', async (req, res) => {
-  const { id } = req.params;
-  const videoUrl = `https://www.youtube.com/watch?v=${id}`;
-  console.log(`Download requested for: ${id}`);
-
-  try {
-    const cobaltRes = await axios.post('https://api.cobalt.tools/api/json', {
-      url: videoUrl,
-      isAudioOnly: true,
-      aFormat: 'mp3',
-      filenamePattern: 'basic',
-    }, {
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      timeout: 30000,
-    });
-
-    if (cobaltRes.data && cobaltRes.data.url) {
-      return res.redirect(cobaltRes.data.url);
-    }
-
-    if (cobaltRes.data && cobaltRes.data.error) {
-      return res.status(500).json({ error: cobaltRes.data.error });
-    }
-
-    res.status(500).json({ error: 'No download URL returned' });
-  } catch (err) {
-    console.error('Download error:', err.message);
-    res.status(500).json({ error: 'Download failed', details: err.message });
-  }
+app.get('/api/download/:id', (req, res) => {
+  res.json({ url: `https://www.youtube.com/watch?v=${req.params.id}` });
 });
 
 app.get('*', (req, res) => {
