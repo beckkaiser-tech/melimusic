@@ -30,35 +30,81 @@
   let playerReady = false;
   let progressInterval = null;
 
-  // Keep audio alive when browser tab is minimized/background
-  const silentAudio = new Audio();
-  silentAudio.loop = true;
-  silentAudio.volume = 0;
-  let audioCtx = null;
-  let silentGain = null;
+  // ═══ BACKGROUND AUDIO KEEP-ALIVE ═══
+  // Mobile Chrome kills background tabs aggressively.
+  // We use 3 layers of defense:
+  //   1. Media Session API → tells Chrome "this is a media app"
+  //   2. Web Audio API oscillator → keeps AudioContext alive
+  //   3. Heartbeat interval → periodically resumes suspended context
 
-  function startSilentAudio() {
+  let audioCtx = null;
+  let oscillator = null;
+  let heartbeatInterval = null;
+
+  function initAudioKeepAlive() {
+    if (audioCtx) return;
     try {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        silentGain = audioCtx.createGain();
-        silentGain.gain.value = 0;
-        silentGain.connect(audioCtx.destination);
-      }
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      oscillator = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.001; // inaudible but keeps context active
+      oscillator.connect(gain);
+      gain.connect(audioCtx.destination);
+      oscillator.start();
     } catch {}
   }
 
-  // Prevent background throttling
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && playerReady && state.playing) {
-      startSilentAudio();
+  function resumeAudioContext() {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
     }
+  }
+
+  // Heartbeat: resume AudioContext every 5s if suspended, reconnect oscillator
+  function startHeartbeat() {
+    if (heartbeatInterval) return;
+    heartbeatInterval = setInterval(() => {
+      if (audioCtx && audioCtx.state === 'suspended') resumeAudioContext();
+      // Reconnect oscillator if disconnected
+      if (oscillator && audioCtx) {
+        try { oscillator.connect(audioCtx.destination); } catch {}
+      }
+    }, 5000);
+  }
+
+  // Media Session API: tells mobile browser "I'm playing media, don't kill me"
+  function updateMediaSession(song) {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title || 'Unknown',
+      artist: song.artist || 'Unknown',
+      album: 'Melimewah MUSIC',
+      artwork: song.thumbnail ? [
+        { src: song.thumbnail, sizes: '480x480', type: 'image/jpeg' }
+      ] : [],
+    });
+    navigator.mediaSession.setActionHandler('play', () => player && player.playVideo());
+    navigator.mediaSession.setActionHandler('pause', () => player && player.pauseVideo());
+    navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+    navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (player && details.seekTime != null) player.seekTo(details.seekTime, true);
+    });
+  }
+
+  // Keep-alive on visibility change
+  document.addEventListener('visibilitychange', () => {
+    resumeAudioContext();
   });
 
-  // Wake AudioContext on first user interaction
-  document.addEventListener('click', () => startSilentAudio(), { once: true });
-  document.addEventListener('touchstart', () => startSilentAudio(), { once: true });
+  // Start on first interaction
+  ['click', 'touchstart', 'keydown'].forEach(evt => {
+    document.addEventListener(evt, () => {
+      initAudioKeepAlive();
+      resumeAudioContext();
+      startHeartbeat();
+    }, { once: true });
+  });
 
   const view = $('#view');
   const miniplayer = $('#miniplayer');
@@ -88,7 +134,9 @@
       state.playing = true;
       updatePlayButtons(true);
       startProgress();
-      startSilentAudio();
+      initAudioKeepAlive();
+      resumeAudioContext();
+      if (state.queue[state.queueIndex]) updateMediaSession(state.queue[state.queueIndex]);
     } else if (e.data === YT.PlayerState.PAUSED) {
       state.playing = false;
       updatePlayButtons(false);
@@ -670,6 +718,7 @@
       $('#np-bg').style.backgroundImage = `url(${song.thumbnail})`;
     }
 
+    updateMediaSession(song);
     updateLikeButton();
     updatePlayingHighlight();
   }
