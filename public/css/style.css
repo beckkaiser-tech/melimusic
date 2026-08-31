@@ -365,6 +365,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   background: var(--player-bg);
   border-top: 1px solid var(--border);
   z-index: 100;
+  cursor: pointer;
 }
 #miniplayer.hidden { display: none; }
 .pb-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -557,10 +558,11 @@ input[type="range"]:hover::-webkit-slider-thumb { opacity: 1; }
 
   #miniplayer {
     grid-template-columns: 1fr auto; grid-template-rows: auto auto;
-    padding: 8px 12px; position: relative;
+    padding: 10px 12px; position: relative;
     border-radius: 12px 12px 0 0; margin: 0 4px;
+    min-height: 60px;
   }
-  .pb-left { min-width: 0; flex: 1; }
+  .pb-left { min-width: 0; flex: 1; padding: 4px 0; }
   #mini-art { width: 48px; height: 48px; }
   .mini-meta { max-width: calc(100vw - 180px); }
   #mini-title { font-size: 13px; }

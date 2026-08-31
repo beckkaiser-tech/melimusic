@@ -877,10 +877,22 @@
 
   // ─── NOW PLAYING PANEL ───
   $('#np-close').onclick = () => nowplaying.classList.add('hidden');
-  miniplayer.onclick = (e) => {
-    if (e.target.closest('.icon-btn') || e.target.closest('input') || e.target.closest('.pb-bar')) return;
+
+  function openNowPlaying() {
     if (!miniplayer.classList.contains('hidden')) nowplaying.classList.remove('hidden');
-  };
+  }
+
+  miniplayer.addEventListener('click', (e) => {
+    if (e.target.closest('.icon-btn') || e.target.closest('input') || e.target.closest('.pb-bar')) return;
+    openNowPlaying();
+  });
+
+  // Mobile: also handle touch on miniplayer
+  miniplayer.addEventListener('touchend', (e) => {
+    if (e.target.closest('.icon-btn') || e.target.closest('input') || e.target.closest('.pb-bar')) return;
+    e.preventDefault();
+    openNowPlaying();
+  });
 
   // Swipe down to close now-playing
   (function() {
