@@ -574,7 +574,8 @@
     $$('.dl-btn', container).forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
-        downloadSong(btn.dataset.id);
+        const song = findSongById(btn.dataset.id);
+        if (song) downloadSong(song);
       };
     });
 
@@ -662,23 +663,71 @@
   }
 
   // ─── DOWNLOAD ───
-  function downloadSong(id) {
-    const song = findSongById(id);
-    const title = song ? `${song.artist} - ${song.title}` : id;
-    const videoUrl = `https://www.youtube.com/watch?v=${id}`;
+  const activeDownloads = new Set();
 
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(videoUrl).then(() => {
-        showToast('Link copied! Paste in cobalt.tools to download');
-      }).catch(() => {
-        showToast('Copy the link from address bar');
-      });
-    } else {
-      showToast('Copy the link manually');
+  function downloadFilename(song) {
+    const t = song ? song.title : 'track';
+    const a = song ? (song.artist || '').split(',')[0].trim() : '';
+    const raw = (a ? `${a} - ${t}` : t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return `${raw.slice(0, 80) || 'track'}.mp3`;
+  }
+
+  function clickDownload(href, name) {
+    const aEl = document.createElement('a');
+    aEl.href = href;
+    aEl.download = name || '';
+    aEl.target = '_blank';
+    aEl.rel = 'noopener noreferrer';
+    document.body.appendChild(aEl);
+    aEl.click();
+    aEl.remove();
+  }
+
+  async function downloadSong(song) {
+    if (!song || !song.id) return;
+    if (activeDownloads.has(song.id)) { toast('Already downloading...'); return; }
+    activeDownloads.add(song.id);
+    toast(`Preparing "${song.title}"...`);
+    try {
+      const st = await (await fetch(`/api/download-start?videoId=${encodeURIComponent(song.id)}`)).json();
+      if (!st.progressUrl) throw new Error('no progress url');
+
+      let url = null;
+      let lastProg = -1;
+      for (let i = 0; i < 60; i++) {
+        if (i) await new Promise(r => setTimeout(r, 2500));
+        try {
+          const p = await (await fetch(`/api/download-progress?progressUrl=${encodeURIComponent(st.progressUrl)}`)).json();
+          if (p.done && p.url) { url = p.url; break; }
+          const raw = Number(p.progress) || 0;
+          const pct = Math.min(99, raw > 100 ? Math.round(raw / 10) : Math.round(raw));
+          if (pct !== lastProg) {
+            lastProg = pct;
+            toast(pct <= 5 && p.text ? String(p.text) : `Converting... ${pct}%`);
+          }
+        } catch {}
+      }
+      if (!url) throw new Error('timeout');
+
+      toast(`Downloading "${song.title}"...`);
+      const name = downloadFilename(song);
+      try {
+        const r = await fetch(url, { mode: 'cors' });
+        if (!r.ok) throw new Error('fetch');
+        const blob = await r.blob();
+        const obj = URL.createObjectURL(blob);
+        clickDownload(obj, name);
+        setTimeout(() => URL.revokeObjectURL(obj), 8000);
+      } catch {
+        clickDownload(url, name);
+      }
+      toast('Download started');
+    } catch (e) {
+      console.error('Download error:', e);
+      toast('Download failed - try again later');
+    } finally {
+      activeDownloads.delete(song.id);
     }
-
-    const w = window.open('https://cobalt.tools/', '_blank');
-    if (!w) showToast('Please allow popups for download');
   }
 
   function toggleFavorite(id) {
@@ -804,7 +853,7 @@
 
   $('#np-download').onclick = () => {
     const song = state.queue[state.queueIndex];
-    if (song) downloadSong(song.id);
+    if (song) downloadSong(song);
   };
 
   const volSlider = $('#mini-volume');

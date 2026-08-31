@@ -206,8 +206,47 @@ app.get('/api/lyrics/search', async (req, res) => {
   res.json({ syncedLyrics: null, plainLyrics: null, source: 'none' });
 });
 
-app.get('/api/download/:id', (req, res) => {
-  res.json({ url: `https://www.youtube.com/watch?v=${req.params.id}` });
+app.get('/api/download-start', async (req, res) => {
+  const { videoId } = req.query;
+  if (!videoId) return res.status(400).json({ error: 'videoId required' });
+
+  try {
+    const result = await axios.get('https://p.savenow.to/ajax/download.php', {
+      params: { url: `https://www.youtube.com/watch?v=${videoId}`, format: 'mp3', apikey: 'free' },
+      timeout: 30000,
+    });
+    if (result.data && result.data.id) {
+      res.json({
+        jobId: result.data.id,
+        progressUrl: result.data.progress_url,
+        title: result.data.title || '',
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to start download' });
+    }
+  } catch (err) {
+    console.error('download-start error:', err.message);
+    res.status(500).json({ error: 'Download start failed' });
+  }
+});
+
+app.get('/api/download-progress', async (req, res) => {
+  const { progressUrl } = req.query;
+  if (!progressUrl) return res.status(400).json({ error: 'progressUrl required' });
+
+  try {
+    const result = await axios.get(progressUrl, { timeout: 15000 });
+    const d = result.data;
+    res.json({
+      done: d.progress >= 1000,
+      progress: d.progress || 0,
+      url: d.download_url || '',
+      text: d.text || '',
+    });
+  } catch (err) {
+    console.error('download-progress error:', err.message);
+    res.status(500).json({ error: 'Progress check failed' });
+  }
 });
 
 app.get('*', (req, res) => {
