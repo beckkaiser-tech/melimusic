@@ -30,34 +30,8 @@
   let playerReady = false;
   let progressInterval = null;
 
-  // ═══ BACKGROUND AUDIO KEEP-ALIVE (Android Chrome) ═══
-  // Media Session API + Web Audio oscillator + periodic wake
-
-  let bgAudioCtx = null;
-  let bgOscillator = null;
-  let bgInterval = null;
-
-  function initBgAudio() {
-    if (bgAudioCtx) return;
-    try {
-      bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      bgOscillator = bgAudioCtx.createOscillator();
-      const g = bgAudioCtx.createGain();
-      g.gain.value = 0.0001; // inaudible
-      bgOscillator.connect(g);
-      g.connect(bgAudioCtx.destination);
-      bgOscillator.start();
-    } catch {}
-  }
-
-  function wakeBgAudio() {
-    if (bgAudioCtx && bgAudioCtx.state === 'suspended') {
-      bgAudioCtx.resume().catch(() => {});
-    }
-    if (bgOscillator && bgAudioCtx) {
-      try { bgOscillator.connect(bgAudioCtx.destination); } catch {}
-    }
-  }
+  // ═══ BACKGROUND AUDIO KEEP-ALIVE ═══
+  // Media Session API + Service Worker
 
   function updateMediaSession(song) {
     if (!('mediaSession' in navigator)) return;
@@ -69,25 +43,14 @@
         { src: song.thumbnail, sizes: '480x480', type: 'image/jpeg' }
       ] : [],
     });
-    navigator.mediaSession.setActionHandler('play', () => { wakeBgAudio(); player && player.playVideo(); });
+    navigator.mediaSession.setActionHandler('play', () => player && player.playVideo());
     navigator.mediaSession.setActionHandler('pause', () => player && player.pauseVideo());
     navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
     navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
     navigator.mediaSession.setActionHandler('seekto', (d) => {
       if (player && d.seekTime != null) player.seekTo(d.seekTime, true);
     });
-    // Periodic keep-alive while media session is active
-    if (bgInterval) clearInterval(bgInterval);
-    bgInterval = setInterval(() => {
-      if (!document.hidden) return;
-      wakeBgAudio();
-    }, 5000);
   }
-
-  // Auto-init on first user interaction
-  ['click', 'touchstart', 'keydown'].forEach(evt => {
-    document.addEventListener(evt, () => { initBgAudio(); wakeBgAudio(); }, { once: true });
-  });
 
   const view = $('#view');
   const miniplayer = $('#miniplayer');
@@ -117,8 +80,6 @@
       state.playing = true;
       updatePlayButtons(true);
       startProgress();
-      initBgAudio();
-      wakeBgAudio();
       if (state.queue[state.queueIndex]) updateMediaSession(state.queue[state.queueIndex]);
     } else if (e.data === YT.PlayerState.PAUSED) {
       state.playing = false;
