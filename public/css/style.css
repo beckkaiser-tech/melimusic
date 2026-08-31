@@ -515,6 +515,31 @@ input[type="range"]:hover::-webkit-slider-thumb { opacity: 1; }
 }
 #toast.show { opacity: 1; }
 
+/* EXIT POPUP */
+.exit-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.85);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 1; transition: opacity 0.3s;
+}
+.exit-overlay.hidden { display: none; }
+.exit-box {
+  background: #282828; border-radius: 12px; padding: 24px 28px;
+  text-align: center; max-width: 320px; width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.exit-box p { margin: 0 0 20px; font-size: 15px; line-height: 1.5; color: #fff; }
+.exit-box small { color: #b3b3b3; font-size: 13px; }
+.exit-btns { display: flex; gap: 12px; justify-content: center; }
+.exit-btns button {
+  flex: 1; padding: 10px 0; border: none; border-radius: 20px;
+  font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s;
+}
+#exit-back { background: #333; color: #fff; }
+#exit-back:hover { background: #444; }
+#exit-quit { background: var(--accent); color: #000; }
+#exit-quit:hover { background: #1ed760; }
+
 /* MOBILE NAV */
 #nav-mobile {
   display: none; position: fixed; bottom: 0; left: 0; right: 0;

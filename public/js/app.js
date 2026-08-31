@@ -142,6 +142,44 @@
     player.loadVideoById(id);
   }
 
+  // ─── EXIT POPUP ───
+  const exitPopup = $('#exit-popup');
+  const exitBack = $('#exit-back');
+  const exitQuit = $('#exit-quit');
+  let pendingExit = false;
+
+  window.addEventListener('beforeunload', (e) => {
+    if (state.playing) {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state.playing) {
+      exitPopup.classList.remove('hidden');
+      pendingExit = true;
+    }
+  });
+
+  exitBack.addEventListener('click', () => {
+    exitPopup.classList.add('hidden');
+    pendingExit = false;
+    // Resume music if it was paused
+    if (playerReady && state.playing === false) {
+      player.playVideo();
+    }
+  });
+
+  exitQuit.addEventListener('click', () => {
+    exitPopup.classList.add('hidden');
+    pendingExit = false;
+    if (playerReady) player.pauseVideo();
+    // Close tab if possible
+    window.close();
+  });
+
   // ─── SPLASH ───
   setTimeout(() => {
     const splash = $('#splash');
