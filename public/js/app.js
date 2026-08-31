@@ -665,11 +665,12 @@
   function downloadSong(id) {
     const song = findSongById(id);
     const title = song ? `${song.artist} - ${song.title}` : id;
-    showToast('Downloading... please wait');
+    showToast('Preparing download...');
 
     const a = document.createElement('a');
     a.href = `/api/download/${id}`;
-    a.download = `${title.replace(/[^\w\s\-()]/g, '').trim()}.mp3`;
+    a.target = '_blank';
+    a.rel = 'noopener';
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();

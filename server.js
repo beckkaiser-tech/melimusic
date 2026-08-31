@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { YouTube } = require('youtube-sr');
-const ytdl = require('@distube/ytdl-core');
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -93,8 +93,6 @@ function formatViews(views) {
   if (views >= 1000) return (views / 1000).toFixed(1) + ' K';
   return views.toString();
 }
-
-const axios = require('axios');
 
 function cleanForSearch(str) {
   return str
@@ -214,22 +212,31 @@ app.get('/api/download/:id', async (req, res) => {
   console.log(`Download requested for: ${id}`);
 
   try {
-    const info = await ytdl.getInfo(videoUrl);
-    const title = info.videoDetails.title.replace(/[^\w\s\-()]/g, '').trim() || id;
-
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Content-Disposition', `attachment; filename="${title}.mp3"; filename*=UTF-8''${encodeURIComponent(title + '.mp3')}`);
-
-    const stream = ytdl.downloadFromInfo(info, { filter: 'audioonly', quality: 'highestaudio' });
-    stream.pipe(res);
-
-    stream.on('error', (err) => {
-      console.error('Stream error:', err);
-      if (!res.headersSent) res.status(500).json({ error: 'Download failed' });
+    const cobaltRes = await axios.post('https://api.cobalt.tools/api/json', {
+      url: videoUrl,
+      isAudioOnly: true,
+      aFormat: 'mp3',
+      filenamePattern: 'basic',
+    }, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
     });
+
+    if (cobaltRes.data && cobaltRes.data.url) {
+      return res.redirect(cobaltRes.data.url);
+    }
+
+    if (cobaltRes.data && cobaltRes.data.error) {
+      return res.status(500).json({ error: cobaltRes.data.error });
+    }
+
+    res.status(500).json({ error: 'No download URL returned' });
   } catch (err) {
     console.error('Download error:', err.message);
-    if (!res.headersSent) res.status(500).json({ error: 'Download failed', details: err.message });
+    res.status(500).json({ error: 'Download failed', details: err.message });
   }
 });
 
