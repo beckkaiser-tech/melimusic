@@ -31,48 +31,8 @@
   let progressInterval = null;
 
   // ═══ BACKGROUND AUDIO KEEP-ALIVE ═══
-  // Mobile Chrome kills background tabs aggressively.
-  // We use 3 layers of defense:
-  //   1. Media Session API → tells Chrome "this is a media app"
-  //   2. Web Audio API oscillator → keeps AudioContext alive
-  //   3. Heartbeat interval → periodically resumes suspended context
+  // Media Session API → tells Chrome "this is a media app, don't kill me"
 
-  let audioCtx = null;
-  let oscillator = null;
-  let heartbeatInterval = null;
-
-  function initAudioKeepAlive() {
-    if (audioCtx) return;
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      oscillator = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      gain.gain.value = 0.001; // inaudible but keeps context active
-      oscillator.connect(gain);
-      gain.connect(audioCtx.destination);
-      oscillator.start();
-    } catch {}
-  }
-
-  function resumeAudioContext() {
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
-    }
-  }
-
-  // Heartbeat: resume AudioContext every 5s if suspended, reconnect oscillator
-  function startHeartbeat() {
-    if (heartbeatInterval) return;
-    heartbeatInterval = setInterval(() => {
-      if (audioCtx && audioCtx.state === 'suspended') resumeAudioContext();
-      // Reconnect oscillator if disconnected
-      if (oscillator && audioCtx) {
-        try { oscillator.connect(audioCtx.destination); } catch {}
-      }
-    }, 5000);
-  }
-
-  // Media Session API: tells mobile browser "I'm playing media, don't kill me"
   function updateMediaSession(song) {
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -91,20 +51,6 @@
       if (player && details.seekTime != null) player.seekTo(details.seekTime, true);
     });
   }
-
-  // Keep-alive on visibility change
-  document.addEventListener('visibilitychange', () => {
-    resumeAudioContext();
-  });
-
-  // Start on first interaction
-  ['click', 'touchstart', 'keydown'].forEach(evt => {
-    document.addEventListener(evt, () => {
-      initAudioKeepAlive();
-      resumeAudioContext();
-      startHeartbeat();
-    }, { once: true });
-  });
 
   const view = $('#view');
   const miniplayer = $('#miniplayer');
@@ -134,8 +80,6 @@
       state.playing = true;
       updatePlayButtons(true);
       startProgress();
-      initAudioKeepAlive();
-      resumeAudioContext();
       if (state.queue[state.queueIndex]) updateMediaSession(state.queue[state.queueIndex]);
     } else if (e.data === YT.PlayerState.PAUSED) {
       state.playing = false;
