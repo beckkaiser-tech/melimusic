@@ -685,9 +685,9 @@
 
   async function downloadSong(song) {
     if (!song || !song.id) return;
-    if (activeDownloads.has(song.id)) { toast('Already downloading...'); return; }
+    if (activeDownloads.has(song.id)) { showToast('Already downloading...'); return; }
     activeDownloads.add(song.id);
-    toast(`Preparing "${song.title}"...`);
+    showToast(`Preparing "${song.title}"...`);
     try {
       const st = await (await fetch(`/api/download-start?videoId=${encodeURIComponent(song.id)}`)).json();
       if (!st.progressUrl) throw new Error('no progress url');
@@ -703,13 +703,13 @@
           const pct = Math.min(99, raw > 100 ? Math.round(raw / 10) : Math.round(raw));
           if (pct !== lastProg) {
             lastProg = pct;
-            toast(pct <= 5 && p.text ? String(p.text) : `Converting... ${pct}%`);
+            showToast(pct <= 5 && p.text ? String(p.text) : `Converting... ${pct}%`);
           }
         } catch {}
       }
       if (!url) throw new Error('timeout');
 
-      toast(`Downloading "${song.title}"...`);
+      showToast(`Downloading "${song.title}"...`);
       const name = downloadFilename(song);
       try {
         const r = await fetch(url, { mode: 'cors' });
@@ -721,10 +721,10 @@
       } catch {
         clickDownload(url, name);
       }
-      toast('Download started');
+      showToast('Download started');
     } catch (e) {
       console.error('Download error:', e);
-      toast('Download failed - try again later');
+      showToast('Download failed - try again later');
     } finally {
       activeDownloads.delete(song.id);
     }
