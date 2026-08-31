@@ -43,7 +43,12 @@
         { src: song.thumbnail, sizes: '480x480', type: 'image/jpeg' }
       ] : [],
     });
-    navigator.mediaSession.setActionHandler('play', () => player && player.playVideo());
+    navigator.mediaSession.setActionHandler('play', () => {
+      if (player && playerReady) {
+        player.playVideo();
+        setTimeout(() => { if (!state.playing && playerReady) player.playVideo(); }, 1000);
+      }
+    });
     navigator.mediaSession.setActionHandler('pause', () => player && player.pauseVideo());
     navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
     navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
@@ -820,8 +825,15 @@
   // ─── CONTROLS ───
   function togglePlay() {
     if (!playerReady) return;
-    if (state.playing) player.pauseVideo();
-    else player.playVideo();
+    if (state.playing) {
+      player.pauseVideo();
+    } else {
+      player.playVideo();
+      // Retry if player doesn't resume within 1s
+      setTimeout(() => {
+        if (!state.playing && playerReady) player.playVideo();
+      }, 1000);
+    }
   }
 
   function playNext() {
