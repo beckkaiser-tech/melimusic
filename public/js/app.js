@@ -30,6 +30,36 @@
   let playerReady = false;
   let progressInterval = null;
 
+  // Keep audio alive when browser tab is minimized/background
+  const silentAudio = new Audio();
+  silentAudio.loop = true;
+  silentAudio.volume = 0;
+  let audioCtx = null;
+  let silentGain = null;
+
+  function startSilentAudio() {
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        silentGain = audioCtx.createGain();
+        silentGain.gain.value = 0;
+        silentGain.connect(audioCtx.destination);
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch {}
+  }
+
+  // Prevent background throttling
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && playerReady && state.playing) {
+      startSilentAudio();
+    }
+  });
+
+  // Wake AudioContext on first user interaction
+  document.addEventListener('click', () => startSilentAudio(), { once: true });
+  document.addEventListener('touchstart', () => startSilentAudio(), { once: true });
+
   const view = $('#view');
   const miniplayer = $('#miniplayer');
   const nowplaying = $('#nowplaying');
@@ -58,6 +88,7 @@
       state.playing = true;
       updatePlayButtons(true);
       startProgress();
+      startSilentAudio();
     } else if (e.data === YT.PlayerState.PAUSED) {
       state.playing = false;
       updatePlayButtons(false);
